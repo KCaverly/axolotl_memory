@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "axolotl-memory"
+version = "0.1.0"
+description = ""
+authors = ["KCaverly <kylebcaverly@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "axolotl-memory", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+torch = {version = "^2.1.2+cpu", source = "pytorch-cpu-src"}
+torchvision = {version = "^0.16.2+cpu", source = "pytorch-cpu-src"}
+torchaudio = {version = "^2.1.2+cpu", source = "pytorch-cpu-src"}
+accelerate = "^0.25.0"
+transformers = "^4.36.2"
+addict = "^2.4.0"
+
+
+[[tool.poetry.source]]
+name = "pytorch-cpu-src"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
