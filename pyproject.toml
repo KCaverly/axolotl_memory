@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "axolotl-memory"
+name = "axolotl_memory"
 version = "0.1.0"
 description = ""
 authors = ["KCaverly <kylebcaverly@gmail.com>"]
 readme = "README.md"
-packages = [{ include = "axolotl-memory", from = "src" }]
+packages = [{ include = "axolotl_memory", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"

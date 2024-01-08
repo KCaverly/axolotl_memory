@@ -3,6 +3,18 @@ Small experiments on estimating transformer memory from axolotl config files.
 
 This is primarily a learning project, in which I am looking to predict the memory consumption of a LLM from an [axolotl]() config file alone.
 The hope is that if we can get a reasonable solution for this, we can move it over to the `axolotl` project directly. [Issue Here](https://github.com/OpenAccess-AI-Collective/axolotl/issues/848)
+## How to Use
+
+Simply pass the axolotl config file to the main script as a '--config' file path to estimate the size in memory.
+
+`python main.py --config examples/code-llama/7b/lora.yml`
+
+Would return:
+
+```
+Base Model:            codellama/CodeLlama-7b-hf
+Estimated Memory:      25.1GiB
+```
 
 ### Definitions
 
