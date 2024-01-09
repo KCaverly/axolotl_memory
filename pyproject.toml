@@ -15,12 +15,17 @@ accelerate = "^0.25.0"
 transformers = "^4.36.2"
 addict = "^2.4.0"
 peft = "^0.7.1"
+bitsandbytes = "^0.42.0"
 
 
 [[tool.poetry.source]]
 name = "pytorch-cpu-src"
 url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
+
+
+[tool.poetry.group.dev.dependencies]
+jupyter = "^1.0.0"
 
 [build-system]
 requires = ["poetry-core"]

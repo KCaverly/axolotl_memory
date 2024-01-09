@@ -13,10 +13,12 @@ def calculate_memory_for_optimizer(base_model, cfg):
         memory = 0
         if bytes_per_param is None:
             for param in base_model.parameters():
-                memory += param.numel() * param.element_size()
+                if param.requires_grad:
+                    memory += param.numel() * param.element_size()
         else:
             for param in base_model.parameters():
-                memory += param.numel() * bytes_per_param
+                if param.requires_grad:
+                    memory += param.numel() * bytes_per_param
 
         return memory
 
@@ -40,17 +42,20 @@ def calculate_memory_for_optimizer(base_model, cfg):
         memory = 0
         if bytes_per_param is None:
             for param in base_model.parameters():
-                memory += param.numel() * param.element_size()
+                if param.requires_grad:
+                    memory += param.numel() * param.element_size()
         else:
             for param in base_model.parameters():
-                memory += param.numel() * bytes_per_param
+                if param.requires_grad:
+                    memory += param.numel() * bytes_per_param
 
         return memory * 3
 
     elif optimizer in ["adamw_bnb_8bit"]:
         memory = 0
         for param in base_model.parameters():
-            memory += param.numel() * 1
+            if param.requires_grad:
+                memory += param.numel() * 1
 
         return memory * 3
 
