@@ -20,15 +20,15 @@ Estimated Memory:      25.1GiB
 
 Borrowing from [here](https://tinkerd.net/blog/machine-learning/distributed-training/#measuring-the-four-sources-of-memory-consumption), we group memory requirements into three broad buckets:
 
-1. Model Memory
+#### 1. Model Memory
 
 The memory required in bytes for storing the model on its own.
 
-2. Gradient & Optimizer Memory
+#### 2. Gradient & Optimizer Memory
 
 This is the required memory, to calculate the necessary gradients and update the model weights.
 
-3. Activation Memory
+#### 3. Activation Memory
 
 This is the required memory, to calculate a forward pass of the model.
 
