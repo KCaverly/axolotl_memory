@@ -2,7 +2,8 @@ import argparse
 from pathlib import Path
 
 from axolotl_memory.utils import load_cfg
-from axolotl_memory.base_model import calculate_memory_base_model
+from axolotl_memory.modelling import calculate_memory_base_model
+from axolotl_memory.optimizer import calculate_memory_for_optimizer
 
 
 def sizeof_fmt(num, suffix="B"):
@@ -31,11 +32,20 @@ if __name__ == "__main__":
     base_model = cfg.get("base_model", None)
     if base_model is None:
         raise Exception("'base_model' not available in axolotl config")
-    (model_size, largest_layer, empty_model) = calculate_memory_base_model(
-        cfg.get("base_model", "unknown")
-    )
+    (model_size, empty_model) = calculate_memory_base_model(cfg)
+
+    # Calculate Optimizer Memory
+    optimizer = cfg.get("optimizer", None)
+    if optimizer is None:
+        raise Exception("'optimizer' not available in axolotl config")
+
+    optimizer_memory = calculate_memory_for_optimizer(empty_model, cfg)
 
     print("")
     print(f"Base Model:            {base_model}")
     print(f"Estimated Memory:      {sizeof_fmt(model_size, 'B')}")
+    print("")
+
+    print(f"Optimizer:             {optimizer}")
+    print(f"Optimizer Memory:      {sizeof_fmt(optimizer_memory, 'B')}")
     print("")

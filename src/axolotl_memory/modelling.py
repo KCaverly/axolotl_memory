@@ -7,7 +7,7 @@ import torch.nn as nn
 from accelerate import init_empty_weights
 from accelerate.utils import calculate_maximum_sizes
 from huggingface_hub.hf_api import ModelInfo
-from transformers import AutoConfig, AutoModel
+from transformers import AutoConfig, AutoModel, LlamaForCausalLM
 from typing import Optional, Tuple, List
 from huggingface_hub import model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
@@ -26,31 +26,53 @@ def verify_on_hub(
 
 
 def load_empty_transformers_model(
-    model_name: str, model_info, trust_remote_code: bool = True
+    model_name: str,
+    model_info,
+    trust_remote_code: bool = True,
 ):
     auto_map = model_info.config.get("auto_map", False)
-    config = AutoConfig.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+
+    config = AutoConfig.from_pretrained(
+        model_name,
+        trust_remote_code=trust_remote_code,
+    )
 
     with init_empty_weights():
-        # remote code could specify a specific `AutoModel` class in the `auto_map`
         constructor = AutoModel
+
         if isinstance(auto_map, dict):
             value = None
+            print(auto_map)
             for key in auto_map.keys():
+                print(key)
                 if key.startswith("AutoModelFor"):
                     value = key
                     break
             if value is not None:
                 constructor = getattr(transformers, value)
-        model = constructor.from_config(config, trust_remote_code=trust_remote_code)
+        model = constructor.from_config(
+            config,
+            trust_remote_code=trust_remote_code,
+        )
 
         return model
 
 
 def calculate_memory_base_model(
-    model_name: str, token: Optional[str] = None, trust_remote_code: bool = True
-) -> Tuple[int, Tuple[int, List[str]], nn.Module]:
+    cfg, trust_remote_code: bool = True, token: Optional[str] = None
+) -> Tuple[int, nn.Module]:
+    model_name = cfg.get("base_model", None)
+    if model_name is None:
+        raise Exception("'base_model' is missing from cfg")
+
     result, model_info = verify_on_hub(model_name, token)
+
+    if cfg.load_in_8bit and cfg.adapter is not None:
+        bytes_per_param = 1.0
+    elif cfg.load_in_4bit and cfg.adapter is not None:
+        bytes_per_param = 0.5
+    else:
+        bytes_per_param = None
 
     if result == "gated":
         raise GatedRepoError(
@@ -66,6 +88,11 @@ def calculate_memory_base_model(
             model_name, model_info, trust_remote_code
         )
 
-        total_size, largest_layer = calculate_maximum_sizes(empty_model)
+        memory = 0
+        for param in empty_model.parameters():
+            if bytes_per_param == None:
+                memory += param.numel() * param.element_size()
+            else:
+                memory += param.numel() * bytes_per_param
 
-        return total_size, largest_layer, empty_model
+        return memory, empty_model
