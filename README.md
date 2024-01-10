@@ -7,43 +7,55 @@ The hope is that if we can get a reasonable solution for this, we can move it ov
 
 Simply pass the axolotl config file to the main script as a '--config' file path to estimate the size in memory.
 
-`python main.py --config examples/code-llama/7b/lora.yml`
+```
+python main.py --config examples/code-llama/34b/lora.yml
+```
 
 Would return:
 
 ```
-Base Model:            codellama/CodeLlama-7b-hf
-Estimated Memory:      25.1GiB
+┌───────────────────────────────────────────────────────────────┐
+│                        Estimate Memory                        │
+├───────────────────────────────────────────────────┬───────────┤
+│ Modelling                                         │           │
+├───────────────────────────────────────────────────┼───────────┤
+│  Base Model (codellama/CodeLlama-34b-hf - 8bit)   │  31.2GiB  │
+│  LORA Adapter                                     │  207.8MiB │
+├───────────────────────────────────────────────────┬───────────┤
+│ Training                                          │           │
+├───────────────────────────────────────────────────┼───────────┤
+│  Gradients                                        │  207.8MiB │
+│  Optimizer: adamw_bnb_8bit                        │  415.5MiB │
+└───────────────────────────────────────────────────┴───────────┘
 ```
 
-### Definitions
+### Functionality
 
 Borrowing from [here](https://tinkerd.net/blog/machine-learning/distributed-training/#measuring-the-four-sources-of-memory-consumption), we group memory requirements into three broad buckets:
 
 #### 1. Model Memory
 
-The memory required in bytes for storing the model on its own.
+The memory required to load the model into memory. Includes base model, quantized or unquantized, and peft adapters.
+
+| Model Base | Base Model | 4bit | 8bit | LORA | QLORA | GPTQ | GPTQ w/Flash Attn | flash attn | xformers attn |
+| ---------- | ---------- | --- | --- | -------- | - | --- | --- | --- | --- |
+| Llama      | ✔️          | ✔️  | ✔️  | ✔️       | :x: | :x: | :x: | :x: | :x: |
 
 #### 2. Gradient & Optimizer Memory
 
-This is the required memory, to calculate the necessary gradients and update the model weights.
+The memory required for a single backward pass of the model.
+
+| Optimizer | Basic |
+| --- | --- |
+| sgd | ✔️ |
+| adamw_hf| ✔️ |
+| adamw_torch | ✔️ |
+| adamw_torch_fused | ✔️ |
+| adamw_apex_fused | :x: |
+| adamw_anyprecision | :x: |
+| adafactor | :x: |
+| adamw_bnb_8bit | ✔️ |
 
 #### 3. Activation Memory
 
-This is the required memory, to calculate a forward pass of the model.
-
-### Roadmap
-
-1. Estimate model memory from Transformers base model.
-- Leverage [accelerate's estimate-memory](https://github.com/huggingface/accelerate/blob/main/src/accelerate/commands/estimate.py) command to grab an empty version of the Transformers model, without the weights loaded into memory, and calculate the size of the base model.
-
-2. Calculate basic memory requirements for standard optimizers.
-- SGD
-- AdamW
-- AdamW - 8bit
-- ...
-
-### How can we test this?
-
-I think a reasonable goal is to estimate memory without 10% to start, and move forward from there.
-To start, we should be able to profile memory on cpu for loading the base model into memory.
+The required memory to do a forward pass of the model.
