@@ -142,9 +142,7 @@ def get_lora_model(base_model, cfg):
 
     if cfg.lora_model_dir:
         model = PeftModel.from_pretrained(
-            base_model,
-            cfg.lora_model_dir,
-            is_trainable=(not False),
+            base_model, cfg.lora_model_dir, is_trainable=True
         )
     else:
         model = get_peft_model(base_model, lora_config)

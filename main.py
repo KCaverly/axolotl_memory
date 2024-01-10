@@ -10,9 +10,10 @@ from axolotl_memory.modelling import (
     calculate_lora_adapter_memory,
     calculate_base_model_memory,
 )
-from axolotl_memory.optimizer import (
+from axolotl_memory.training import (
     calculate_gradient_memory,
     calculate_optimizer_state_memory,
+    calculate_activation_memory,
 )
 
 
@@ -30,8 +31,6 @@ def print_table(title, details):
         MemoryCategory.TRAINING: [],
         MemoryCategory.INFERENCE: [],
     }
-
-    num_columns = 3
 
     for item in details:
         memory_str = sizeof_fmt(item.memory, "B")
@@ -158,5 +157,9 @@ if __name__ == "__main__":
     # Calculate Memory Needed for Optimizer
     optimizer_memory = calculate_optimizer_state_memory(base_model, cfg)
     details.append(optimizer_memory)
+
+    # Calculate Memory Needed for Activations
+    activation_memory = calculate_activation_memory(base_model, cfg)
+    details.append(activation_memory)
 
     print_table("Memory Estimate", details)
