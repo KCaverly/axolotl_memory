@@ -1,12 +1,19 @@
 import argparse
+from enum import Enum
 from pathlib import Path
 from typing import List
+from axolotl_memory.memory import MemoryCategory
 from axolotl_memory.utils import load_cfg
 from axolotl_memory.modelling import (
-    calculate_memory_base_model,
-    calculate_memory_with_lora,
+    load_base_model,
+    get_lora_model,
+    calculate_lora_adapter_memory,
+    calculate_base_model_memory,
 )
-from axolotl_memory.optimizer import calculate_memory_for_optimizer
+from axolotl_memory.optimizer import (
+    calculate_gradient_memory,
+    calculate_optimizer_state_memory,
+)
 
 
 def sizeof_fmt(num, suffix="B"):
@@ -15,6 +22,41 @@ def sizeof_fmt(num, suffix="B"):
             return f"{num:3.1f}{unit}{suffix}"
         num /= 1024.0
     return f"{num:.1f}Yi{suffix}"
+
+
+def print_table(title, details):
+    categories = {
+        MemoryCategory.MODELLING: [],
+        MemoryCategory.TRAINING: [],
+        MemoryCategory.INFERENCE: [],
+    }
+
+    num_columns = 3
+
+    for item in details:
+        memory_str = sizeof_fmt(item.memory, "B")
+        categories[item.category].append([item.title, str(item.precision), memory_str])
+
+    rows = []
+    for category, values in categories.items():
+        if len(values) == 0:
+            continue
+
+        rows.append(
+            {
+                "type": "header",
+                "columns": [f" {str(category)}", "Precision", "Memory"],
+            }
+        )
+
+        for row in values:
+            rows.append({"type": "data", "columns": [f"  {row[0]}"] + row[1:]})
+
+    table = create_ascii_table(
+        rows, title, num_columns=3, padding=2, align=["left", "center", "center"]
+    )
+
+    print(table)
 
 
 def create_ascii_table(
@@ -77,6 +119,7 @@ def create_ascii_table(
 
 
 if __name__ == "__main__":
+    # Parse Arguments
     parser = argparse.ArgumentParser(
         description="Estimate the memory for an axolotl config"
     )
@@ -87,51 +130,33 @@ if __name__ == "__main__":
     args = parser.parse_args()
     path = Path(args.config)
 
+    # Initialize Details
+    details = []
+
     # Load in Config
     cfg = load_cfg(path)
 
-    # Calculate Base Model Size
-    base_model = cfg.get("base_model", None)
-    if base_model is None:
-        raise Exception("'base_model' not available in axolotl config")
-    (model_size, empty_model) = calculate_memory_base_model(cfg)
+    # Load Empty Model
+    base_model = load_base_model(cfg)
 
-    # Calculate Load Memory
-    lora_model, lora_memory = calculate_memory_with_lora(empty_model, cfg)
+    # Calculate Base Model Memory
+    base_memory = calculate_base_model_memory(base_model, cfg)
+    details.append(base_memory)
 
-    # Calculate Optimizer Memory
-    optimizer = cfg.get("optimizer", None)
-    if optimizer is None:
-        raise Exception("'optimizer' not available in axolotl config")
+    # Calculate Adapter Memory
+    if cfg.adapter == "lora":
+        base_model = get_lora_model(base_model, cfg)
+        lora_memory = calculate_lora_adapter_memory(base_model, cfg)
+        details.append(lora_memory)
 
-    optimizer_memory = calculate_memory_for_optimizer(lora_model, cfg)
+    # Calculate Training Memory
 
-    rows = [
-        {"type": "header", "columns": [" Modelling", ""]},
-        {
-            "type": "row",
-            "columns": [
-                f"  Base Model ({base_model})",
-                f"{sizeof_fmt(model_size, 'B')}",
-            ],
-        },
-        {"type": "row", "columns": ["  With LORA", f"{sizeof_fmt(model_size, 'B')}"]},
-        {"type": "header", "columns": [" Optimization", ""]},
-        {
-            "type": "row",
-            "columns": [
-                f"  {optimizer}",
-                f"{sizeof_fmt(optimizer_memory, 'B')}",
-            ],
-        },
-    ]
+    # Calculate Memory Needed for Gradients
+    gradient_memory = calculate_gradient_memory(base_model, cfg)
+    details.append(gradient_memory)
 
-    table = create_ascii_table(
-        rows,
-        title="Estimate Memory",
-        num_columns=2,
-        padding=3,
-        align=["left", "center"],
-    )
+    # Calculate Memory Needed for Optimizer
+    optimizer_memory = calculate_optimizer_state_memory(base_model, cfg)
+    details.append(optimizer_memory)
 
-    print(table)
+    print_table("Memory Estimate", details)

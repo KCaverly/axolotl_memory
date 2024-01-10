@@ -14,6 +14,7 @@ from typing import Optional, Tuple, List
 from huggingface_hub import model_info
 from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 from peft.tuners.lora import QuantLinear
+from axolotl_memory.memory import MemoryPrecision, MemoryCategory, MemoryItem
 
 
 def verify_on_hub(
@@ -59,44 +60,64 @@ def load_empty_transformers_model(
         return model
 
 
-def calculate_memory_base_model(
-    cfg, trust_remote_code: bool = True, token: Optional[str] = None
-) -> Tuple[int, nn.Module]:
+def load_base_model(cfg, token: Optional[str] = None):
     model_name = cfg.get("base_model", None)
     if model_name is None:
         raise Exception("'base_model' is missing from cfg")
 
     result, model_info = verify_on_hub(model_name, token)
 
-    if cfg.load_in_8bit and cfg.adapter is not None:
-        bytes_per_param = 1.0
-    elif cfg.load_in_4bit and cfg.adapter is not None:
-        bytes_per_param = 0.5
-    else:
-        bytes_per_param = None
-
     if result == "gated":
         raise GatedRepoError(
-            f"Repo for model `{model_name}` is gated. You must be authenticated to access it. Please run `huggingface-cli login`."
+            f"Repo for model '{model_name}' is gated. You must be authenticated to access it. Please run `huggingface-cli login`."
         )
     elif result == "repo":
         raise RepositoryNotFoundError(
-            f"Repo for model `{model_name}` does not exist on the Hub. If you are trying to access a private repo,"
-            " make sure you are authenticated via `huggingface-cli login` and have access."
+            f"Repo for model `{model_name}` does not exist on the Hub. If you are trying to access a private repo, make sure you are authenticated via `huggingface-cli login` and have access."
         )
     else:
-        empty_model = load_empty_transformers_model(
-            model_name, model_info, trust_remote_code
+        return load_empty_transformers_model(
+            model_name, model_info, trust_remote_code=True
         )
 
-        memory = 0
-        for param in empty_model.parameters():
-            if bytes_per_param == None:
-                memory += param.numel() * param.element_size()
-            else:
-                memory += param.numel() * bytes_per_param
 
-        return memory, empty_model
+def calculate_base_model_memory(base_model, cfg):
+    if cfg.load_in_8bit and cfg.adapter is not None:
+        bytes_per_param = 1.0
+        precision = MemoryPrecision.BIT8
+    elif cfg.load_in_4bit and cfg.adapter is not None:
+        bytes_per_param = 0.5
+        precision = MemoryPrecision.BIT4
+    else:
+        bytes_per_param = None
+        precision = None
+
+    base_model_name = cfg.get("base_model")
+
+    memory = 0
+    if bytes_per_param is None:
+        for param in base_model.parameters():
+            memory += param.numel() * param.element_size()
+
+            if param.element_size() == 4:
+                if precision is not None and precision != MemoryPrecision.BIT32:
+                    precision = MemoryPrecision.MIXED
+                else:
+                    precision = MemoryPrecision.BIT32
+
+            elif param.element_size() == 2:
+                if precision is not None and precision != MemoryPrecision.BIT16:
+                    precision = MemoryPrecision.MIXED
+                else:
+                    precision = MemoryPrecision.BIT16
+
+    else:
+        for param in base_model.parameters():
+            memory += param.numel() * bytes_per_param
+
+    return MemoryItem(
+        MemoryCategory.MODELLING, f"Base Model ({base_model_name})", precision, memory
+    )
 
 
 def get_lora_model(base_model, cfg):
@@ -131,50 +152,47 @@ def get_lora_model(base_model, cfg):
     return model
 
 
-def calculate_memory_with_lora(base_model, cfg):
-    lora_model = get_lora_model(base_model, cfg)
-
-    if cfg.load_in_8bit and cfg.adapter is not None:
-        bytes_per_param = 1.0
-    elif cfg.load_in_4bit and cfg.adapter is not None:
-        bytes_per_param = 0.5
+def calculate_lora_adapter_memory(lora_model, cfg):
+    if cfg.bf16:
+        bytes_per_param = 2.0
+        precision = MemoryPrecision.BIT16
+    elif cfg.fp16:
+        bytes_per_param = 2.0
+        precision = MemoryPrecision.BIT16
+    elif cfg.fp32:
+        bytes_per_param = 4.0
+        precision = MemoryPrecision.BIT32
     else:
         bytes_per_param = None
 
-    if cfg.bf16 and cfg.adapter is not None:
-        trainable_bytes_per_param = 2.0
-    elif cfg.fp16 and cfg.adapter is not None:
-        trainable_bytes_per_param = 2.0
-    elif cfg.fp32 and cfg.adapter is not None:
-        trainable_bytes_per_param = 4.0
-    else:
-        trainable_bytes_per_param = None
-
+    # Calculate Memory for only Trainable Weights
     memory = 0
-
-    # Calculate memory for frozen weights
     if bytes_per_param is None:
         for param in lora_model.parameters():
-            if not param.requires_grad:
+            if param.requires_grad:
                 memory += param.numel() * param.element_size()
+
+                if param.element_size() == 4:
+                    if precision is None:
+                        precision = MemoryPrecision.BIT32
+                    elif precision != MemoryPrecision.BIT32:
+                        precision = MemoryPrecision.MIXED
+
+                elif param.element_size() == 2:
+                    if precision is None:
+                        precision = MemoryPrecision.BIT16
+                    elif precision != MemoryPrecision.BIT16:
+                        precision = MemoryPrecision.MIXED
+
+                else:
+                    precision = MemoryPrecision.UNKNOWN
 
     else:
         for param in lora_model.parameters():
-            if not param.requires_grad:
+            if param.requires_grad:
                 memory += param.numel() * bytes_per_param
 
-    # Calculate memory for lora weights
-    if trainable_bytes_per_param is None:
-        for param in lora_model.parameters():
-            if param.requires_grad:
-                memory += param.numel() * param.element_size()
-
-    else:
-        for param in lora_model.parameters():
-            if param.requires_grad:
-                memory += param.numel() * trainable_bytes_per_param
-
-    return lora_model, memory
+    return MemoryItem(MemoryCategory.MODELLING, f"LORA Adapter", precision, memory)
 
 
 def find_all_linear_names(model):
