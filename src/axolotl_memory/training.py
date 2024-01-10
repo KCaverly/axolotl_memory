@@ -155,9 +155,12 @@ def calculate_activation_memory(base_model, cfg) -> MemoryItem:
     else:
         precision = MemoryPrecision.UNKNOWN
 
+    # Memory is multiplied by the batch size
+    memory = largest_layer_size * cfg.micro_batch_size
+
     return MemoryItem(
         MemoryCategory.TRAINING,
-        f"Activations",
+        f"Activations (batch size: {cfg.micro_batch_size})",
         precision,
-        largest_layer_size,
+        memory,
     )

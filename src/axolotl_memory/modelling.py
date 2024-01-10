@@ -190,7 +190,9 @@ def calculate_lora_adapter_memory(lora_model, cfg):
             if param.requires_grad:
                 memory += param.numel() * bytes_per_param
 
-    return MemoryItem(MemoryCategory.MODELLING, f"LORA Adapter", precision, memory)
+    return MemoryItem(
+        MemoryCategory.MODELLING, f"LORA Adapter (r = {cfg.lora_r})", precision, memory
+    )
 
 
 def find_all_linear_names(model):
