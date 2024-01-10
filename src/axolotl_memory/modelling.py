@@ -141,13 +141,38 @@ def calculate_memory_with_lora(base_model, cfg):
     else:
         bytes_per_param = None
 
+    if cfg.bf16 and cfg.adapter is not None:
+        trainable_bytes_per_param = 2.0
+    elif cfg.fp16 and cfg.adapter is not None:
+        trainable_bytes_per_param = 2.0
+    elif cfg.fp32 and cfg.adapter is not None:
+        trainable_bytes_per_param = 4.0
+    else:
+        trainable_bytes_per_param = None
+
     memory = 0
+
+    # Calculate memory for frozen weights
     if bytes_per_param is None:
         for param in lora_model.parameters():
-            memory += param.numel() * param.element_size()
+            if not param.requires_grad:
+                memory += param.numel() * param.element_size()
+
     else:
         for param in lora_model.parameters():
-            memory += param.numel() * bytes_per_param
+            if not param.requires_grad:
+                memory += param.numel() * bytes_per_param
+
+    # Calculate memory for lora weights
+    if trainable_bytes_per_param is None:
+        for param in lora_model.parameters():
+            if param.requires_grad:
+                memory += param.numel() * param.element_size()
+
+    else:
+        for param in lora_model.parameters():
+            if param.requires_grad:
+                memory += param.numel() * trainable_bytes_per_param
 
     return lora_model, memory
 
