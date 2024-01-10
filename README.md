@@ -8,7 +8,7 @@ The hope is that if we can get a reasonable solution for this, we can move it ov
 Simply pass the axolotl config file to the main script as a '--config' file path to estimate the size in memory.
 
 ```
-python main.py --config examples/code-llama/34b/lora.yml
+python main.py --config examples/code-llama/7b/lora.yml
 ```
 
 Would return:
